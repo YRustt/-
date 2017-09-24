@@ -1,0 +1,4 @@
+.idea/*
+venv/*
+cmake-build-debug/*
+Lab_1/.ipynb_checkpoints/*
