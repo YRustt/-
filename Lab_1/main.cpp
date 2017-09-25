@@ -3,7 +3,7 @@
 #include <random>
 #include <ctime>
 
-#define MY_TYPE float
+#define MY_TYPE double
 
 //__declspec(align(16))
 // __restrict
@@ -55,7 +55,7 @@ namespace {
         }
     }
 
-    void FillRandom(float* a, int n)
+    void FillRandom(MY_TYPE* a, int n)
     {
         std::default_random_engine eng;
         std::uniform_real_distribution<float> dist;
@@ -73,9 +73,9 @@ int main(int argc, char* argv[])
     const int n = atoi(argv[1]);
     std::cout << n << "; ";
 
-    float* a = new float[n * n];
-    float* b = new float[n * n];
-    float* c = new float[n * n];
+    MY_TYPE* a = new MY_TYPE[n * n];
+    MY_TYPE* b = new MY_TYPE[n * n];
+    MY_TYPE* c = new MY_TYPE[n * n];
 
     FillRandom(a, n);
     FillRandom(b, n);
