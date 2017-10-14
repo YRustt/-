@@ -2,3 +2,5 @@
 venv/*
 cmake-build-debug/*
 Lab_1/.ipynb_checkpoints/*
+Lab_2/.ipynb_checkpoints/*
+Lab_2/data/*
