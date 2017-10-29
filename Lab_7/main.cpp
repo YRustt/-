@@ -9,9 +9,10 @@
 #include <algorithm>
 #include <vector>
 #include <string>
+#include <stdio.h>
 
-uint64_t BLOCK_SIZE = 1000;
-uint64_t MEMORY_SIZE = 50000;
+uint64_t BLOCK_SIZE = 200;
+uint64_t MEMORY_SIZE = 10000;
 uint64_t COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 
@@ -22,22 +23,29 @@ public:
             block_size(BLOCK_SIZE)
     {
         this->fin.open(filename.c_str(), std::ios::in | std::ios::binary);
+        this->fin.seekg(0, std::ios::end);
         this->file_size = fin.tellg() / sizeof(uint64_t);
+        this->fin.seekg(0);
         this->block = new uint64_t[this->block_size];
 
         this->read_block();
     }
 
     uint64_t get_min() {
-        if (this->block[0] == UINTMAX_MAX && this->cur_read_idx != this->file_size) {
+        if (this->block[0] == UINTMAX_MAX) {
             this->read_block();
         }
 
-        uint64_t tmp = this->block[0];
+        return this->block[0];
+    }
+
+    void pop_min() {
+        if (this->block[0] == UINTMAX_MAX) {
+	    return;
+        }
+
         this->block[0] = UINTMAX_MAX;
         push(0);
-
-        return tmp;
     }
 
     ~Heap() {
@@ -55,7 +63,7 @@ private:
         if (l < this->block_size && this->block[l] < this->block[idx]) {
             tmp = l;
         }
-        if (r < this->block_size && this->block[r] < this->block[idx]) {
+        if (r < this->block_size && this->block[r] < this->block[tmp]) {
             tmp = r;
         }
         if (tmp != idx) {
@@ -65,12 +73,16 @@ private:
     }
 
     void read_block() {
+        if (this->cur_read_idx == this->file_size) {
+            return;
+        }
+
         if (this->cur_read_idx + this->block_size > this->file_size) {
             this->block_size = this->file_size - this->cur_read_idx;
         }
         this->cur_read_idx += this->block_size;
 
-        this->fin.read((char*) block, this->block_size);
+        this->fin.read((char*) block, sizeof(uint64_t) * this->block_size);
 
         int64_t i = (int64_t) (this->block_size - 1) / 2;
         while (i >= 0) {
@@ -131,40 +143,46 @@ uint64_t merge(uint64_t count_block, uint64_t prev_count_files, uint64_t num_it)
     for (uint64_t i = 0; i < prev_count_files; i += count_block) {
         std::ofstream fout(make_name(num_it + 1, num_file).c_str(), std::ios::out | std::ios::binary);
 
-        if (i + count_block > count_files) {
-            count_block = count_files - i;
+        if (i + count_block > prev_count_files) {
+            count_block = prev_count_files - i;
         }
 
         std::vector<Heap*> heaps(count_block);
 
         for (uint64_t j = 0; j < count_block; ++j) {
-            heaps[i] = new Heap(make_name(num_it, i + j).c_str());
+            heaps[j] = new Heap(make_name(num_it, i + j + 1).c_str());
         }
 
         uint64_t cur_idx = 0;
-        uint64_t min = UINTMAX_MAX;
+	
         while (true) {
+            uint64_t min_j = 0, min = UINTMAX_MAX;
             for (uint64_t j = 0; j < count_block; ++j) {
-                min = std::min(min, heaps[i]->get_min());
+                if (heaps[j]->get_min() < min) {
+                    min = heaps[j]->get_min();
+                    min_j = j;
+                }
             }
+            heaps[min_j]->pop_min();
 
             if (min == UINTMAX_MAX) {
                 break;
             }
 
-            block[cur_idx++] = min;
+            block[cur_idx] = min;
+	    cur_idx++;
 
             if (cur_idx == MEMORY_SIZE) {
                 fout.write((char*) block, sizeof(uint64_t) * MEMORY_SIZE);
+                cur_idx = 0;
             }
         }
         if (cur_idx) {
             fout.write((char*) block, sizeof(uint64_t) * cur_idx);
         }
 
-
         for (uint64_t j = 0; j < count_block; ++j) {
-            free(heaps[i]);
+            free(heaps[j]);
         }
 
         count_files++;
@@ -176,13 +194,42 @@ uint64_t merge(uint64_t count_block, uint64_t prev_count_files, uint64_t num_it)
 }
 
 
-int main() {
+void make_output(uint64_t num_it) {
+    std::ifstream fin(make_name(num_it, (uint64_t) 1).c_str(), std::ios::in | std::ios::binary);
+    std::ofstream fout("output.bin", std::ios::out | std::ios::binary);
 
+    fin.seekg(0, std::ios::end);
+    uint64_t N = fin.tellg() / sizeof(uint64_t);
+    fin.seekg(0);    
+
+    fout.write((char*) &N, sizeof(uint64_t));
+
+    // printf("%lu\n", N);
+    
+    uint64_t read_size = MEMORY_SIZE;
+    uint64_t *block = new uint64_t[MEMORY_SIZE];
+
+    for (uint64_t i = 0; i < N; i += MEMORY_SIZE) {
+	//printf("%lu\n", i);
+        if (i + MEMORY_SIZE > N) {
+            read_size = N - i;
+        }        
+        fin.read((char*) block, sizeof(uint64_t) * read_size);
+        fout.write((char*) block, sizeof(uint64_t) * read_size);
+    }
+
+    free(block);
+    fin.close();
+    fout.close();
+}
+
+
+int main() {
     uint64_t count_files = sort_blocks(), num_it = 1;
     while (count_files != 1) {
         count_files = merge(COUNT_BLOCK, count_files, num_it);
         num_it++;
     }
-
+    make_output(num_it);
     return 0;
 }
