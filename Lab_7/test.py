@@ -31,7 +31,6 @@ if __name__ == '__main__':
             print("N=%d" % N)
             print(ar)
 
-
     begin_time = time.time()
     os.system('./main')
     end_time = time.time()

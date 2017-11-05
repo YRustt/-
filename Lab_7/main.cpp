@@ -11,69 +11,68 @@
 #include <string>
 #include <stdio.h>
 
-uint64_t BLOCK_SIZE = 200;
-uint64_t MEMORY_SIZE = 10000;
-uint64_t COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
+
+typedef uint64_t index_type;
+
+index_type BLOCK_SIZE = 200;
+index_type MEMORY_SIZE = 10000;
+index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 
-class Heap {
+template<class data_type>
+data_type max_value() {
+    return;
+}
+
+template<>
+uint64_t max_value<uint64_t>() {
+    return UINT64_MAX;
+}
+
+
+template<class data_type>
+class File {
 public:
-    Heap(std::string filename):
+    File(std::string filename):
+            cur_idx(0),
             cur_read_idx(0),
             block_size(BLOCK_SIZE)
     {
         this->fin.open(filename.c_str(), std::ios::in | std::ios::binary);
-        this->fin.seekg(0, std::ios::end);
-        this->file_size = fin.tellg() / sizeof(uint64_t);
-        this->fin.seekg(0);
-        this->block = new uint64_t[this->block_size];
 
+        // get file size
+        this->fin.seekg(0, std::ios::end);
+        this->file_size = fin.tellg() / sizeof(data_type);
+        this->fin.seekg(0);
+
+        this->block = new data_type[this->block_size];
         this->read_block();
     }
-
-    uint64_t get_min() {
-        if (this->block[0] == UINTMAX_MAX) {
-            this->read_block();
-        }
-
-        return this->block[0];
-    }
-
-    void pop_min() {
-        if (this->block[0] == UINTMAX_MAX) {
-	    return;
-        }
-
-        this->block[0] = UINTMAX_MAX;
-        push(0);
-    }
-
-    ~Heap() {
+    ~File() {
         fin.close();
         free(block);
     }
-private:
-    uint64_t left(uint64_t i) { return 2 * i + 1; }
 
-    uint64_t right(uint64_t i) { return 2 * i + 2; }
+    data_type get_min() {
+        if (this->cur_idx == this->block_size) {
+            this->read_block();
+            this->cur_idx = 0;
+        }
 
-    void push(uint64_t idx) {
-        uint64_t l = left(idx), r = right(idx);
-        uint64_t tmp = idx;
-        if (l < this->block_size && this->block[l] < this->block[idx]) {
-            tmp = l;
-        }
-        if (r < this->block_size && this->block[r] < this->block[tmp]) {
-            tmp = r;
-        }
-        if (tmp != idx) {
-            std::swap(this->block[idx], this->block[tmp]);
-            this->push(tmp);
-        }
+        return this->block[this->cur_idx];
     }
 
+    void pop_min() {
+        if (this->block[0] == max_value<data_type>()) {
+            return;
+        }
+
+        this->cur_idx++;
+    }
+private:
     void read_block() {
         if (this->cur_read_idx == this->file_size) {
+            this->block[0] = max_value<data_type>();
             return;
         }
 
@@ -82,49 +81,53 @@ private:
         }
         this->cur_read_idx += this->block_size;
 
-        this->fin.read((char*) block, sizeof(uint64_t) * this->block_size);
-
-        int64_t i = (int64_t) (this->block_size - 1) / 2;
-        while (i >= 0) {
-            push(i);
-            --i;
-        }
+        this->fin.read((char*) block, sizeof(data_type) * this->block_size);
     }
 
     std::ifstream fin;
-    uint64_t * block;
-    uint64_t block_size;
-    uint64_t file_size;
-    uint64_t cur_read_idx;
+    data_type *block;
+    index_type block_size, cur_idx;
+    index_type file_size, cur_read_idx;
 };
 
 
-const std::string make_name(uint64_t num_it, uint64_t i) {
+const std::string make_name(index_type num_it, index_type i) {
     std::ostringstream oss;
     oss << num_it << "_" << i << ".bin";
     return oss.str();
 }
 
+template<class data_type>
+bool comp(const data_type& d1, const data_type& d2) {
+    return false;
+}
 
-uint64_t sort_blocks() {
+template<>
+bool comp<uint64_t>(const uint64_t& d1, const uint64_t& d2) {
+    return d1 < d2;
+}
+
+
+template<class data_type>
+index_type sort_blocks() {
     std::ifstream fin("input.bin", std::ios::in | std::ios::binary);
-    uint64_t N;
-    fin.read((char*) &N, sizeof(uint64_t));
+    index_type N;
+    fin.read((char*) &N, sizeof(index_type));
 
-    uint64_t *block = new uint64_t[MEMORY_SIZE];
-    uint64_t count_files = 0, num_file = 1;
+    data_type *block = new data_type[MEMORY_SIZE];
+    index_type count_files = 0, num_file = 1;
 
-    for (uint64_t i = 0; i < N; i += MEMORY_SIZE) {
-        uint64_t read_size = MEMORY_SIZE;
+    for (index_type i = 0; i < N; i += MEMORY_SIZE) {
+        index_type read_size = MEMORY_SIZE;
         if (i + MEMORY_SIZE > N) {
             read_size = N - i;
         }
 
-        fin.read((char*) block, sizeof(uint64_t) * read_size);
-        std::sort(block, block + read_size);
+        fin.read((char*) block, sizeof(data_type) * read_size);
+        std::sort(block, block + read_size, comp<data_type>);
 
-        std::ofstream fout(make_name((uint64_t) 1, num_file).c_str(), std::ios::out | std::ios::binary);
-        fout.write((char*) block, sizeof(uint64_t) * read_size);
+        std::ofstream fout(make_name((index_type) 1, num_file).c_str(), std::ios::out | std::ios::binary);
+        fout.write((char*) block, sizeof(data_type) * read_size);
         fout.close();
 
         count_files++;
@@ -136,53 +139,55 @@ uint64_t sort_blocks() {
 }
 
 
-uint64_t merge(uint64_t count_block, uint64_t prev_count_files, uint64_t num_it) {
-    uint64_t count_files = 0, num_file = 1;
-    uint64_t *block = new uint64_t[MEMORY_SIZE];
+template<class data_type>
+index_type merge(index_type count_block, index_type prev_count_files, index_type num_it) {
+    index_type count_files = 0, num_file = 1;
+    data_type *block = new data_type[MEMORY_SIZE];
 
-    for (uint64_t i = 0; i < prev_count_files; i += count_block) {
+    for (index_type i = 0; i < prev_count_files; i += count_block) {
         std::ofstream fout(make_name(num_it + 1, num_file).c_str(), std::ios::out | std::ios::binary);
 
         if (i + count_block > prev_count_files) {
             count_block = prev_count_files - i;
         }
 
-        std::vector<Heap*> heaps(count_block);
+        std::vector<File<data_type>*> files(count_block);
 
-        for (uint64_t j = 0; j < count_block; ++j) {
-            heaps[j] = new Heap(make_name(num_it, i + j + 1).c_str());
+        for (index_type j = 0; j < count_block; ++j) {
+            files[j] = new File<data_type>(make_name(num_it, i + j + 1));
         }
 
-        uint64_t cur_idx = 0;
+        index_type cur_idx = 0;
 	
         while (true) {
-            uint64_t min_j = 0, min = UINTMAX_MAX;
-            for (uint64_t j = 0; j < count_block; ++j) {
-                if (heaps[j]->get_min() < min) {
-                    min = heaps[j]->get_min();
+            index_type min_j = 0;
+            data_type min = max_value<data_type>();
+            for (index_type j = 0; j < count_block; ++j) {
+                if (comp<data_type>(files[j]->get_min(), min)) {
+                    min = files[j]->get_min();
                     min_j = j;
                 }
             }
-            heaps[min_j]->pop_min();
+            files[min_j]->pop_min();
 
-            if (min == UINTMAX_MAX) {
+            if (min == max_value<data_type>()) {
                 break;
             }
 
             block[cur_idx] = min;
-	    cur_idx++;
+	        cur_idx++;
 
             if (cur_idx == MEMORY_SIZE) {
-                fout.write((char*) block, sizeof(uint64_t) * MEMORY_SIZE);
+                fout.write((char*) block, sizeof(data_type) * MEMORY_SIZE);
                 cur_idx = 0;
             }
         }
         if (cur_idx) {
-            fout.write((char*) block, sizeof(uint64_t) * cur_idx);
+            fout.write((char*) block, sizeof(data_type) * cur_idx);
         }
 
-        for (uint64_t j = 0; j < count_block; ++j) {
-            free(heaps[j]);
+        for (index_type j = 0; j < count_block; ++j) {
+            free(files[j]);
         }
 
         count_files++;
@@ -194,28 +199,26 @@ uint64_t merge(uint64_t count_block, uint64_t prev_count_files, uint64_t num_it)
 }
 
 
-void make_output(uint64_t num_it) {
-    std::ifstream fin(make_name(num_it, (uint64_t) 1).c_str(), std::ios::in | std::ios::binary);
+template<class data_type>
+void make_output(index_type num_it) {
+    std::ifstream fin(make_name(num_it, (index_type) 1).c_str(), std::ios::in | std::ios::binary);
     std::ofstream fout("output.bin", std::ios::out | std::ios::binary);
 
     fin.seekg(0, std::ios::end);
-    uint64_t N = fin.tellg() / sizeof(uint64_t);
-    fin.seekg(0);    
+    uint64_t N = fin.tellg() / sizeof(data_type);
+    fin.seekg(0);
 
-    fout.write((char*) &N, sizeof(uint64_t));
-
-    // printf("%lu\n", N);
+    fout.write((char*) &N, sizeof(index_type));
     
-    uint64_t read_size = MEMORY_SIZE;
-    uint64_t *block = new uint64_t[MEMORY_SIZE];
+    index_type read_size = MEMORY_SIZE;
+    data_type *block = new data_type[MEMORY_SIZE];
 
-    for (uint64_t i = 0; i < N; i += MEMORY_SIZE) {
-	//printf("%lu\n", i);
+    for (index_type i = 0; i < N; i += MEMORY_SIZE) {
         if (i + MEMORY_SIZE > N) {
             read_size = N - i;
         }        
-        fin.read((char*) block, sizeof(uint64_t) * read_size);
-        fout.write((char*) block, sizeof(uint64_t) * read_size);
+        fin.read((char*) block, sizeof(data_type) * read_size);
+        fout.write((char*) block, sizeof(data_type) * read_size);
     }
 
     free(block);
@@ -225,11 +228,11 @@ void make_output(uint64_t num_it) {
 
 
 int main() {
-    uint64_t count_files = sort_blocks(), num_it = 1;
+    index_type count_files = sort_blocks<uint64_t>(), num_it = 1;
     while (count_files != 1) {
-        count_files = merge(COUNT_BLOCK, count_files, num_it);
+        count_files = merge<uint64_t>(COUNT_BLOCK, count_files, num_it);
         num_it++;
     }
-    make_output(num_it);
+    make_output<uint64_t>(num_it);
     return 0;
 }
