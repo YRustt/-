@@ -2,114 +2,72 @@
 // Created by yrustt on 26.11.17.
 //
 
+#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <stdint.h>
 #include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
+#include <cstdlib>
 
 
-uint32_t BLOCK_SIZE = 200;
-uint32_t MEMORY_SIZE = 10000;
-uint32_t COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
+typedef uint32_t index_type;
 
+index_type MAX_VALUE = UINT32_MAX;
 
-struct Pair {
-    uint32_t i;
-    uint32_t r_i;
-    uint32_t next_i;
-    uint32_t r_next_i;
+index_type BLOCK_SIZE = 200;
+index_type MEMORY_SIZE = 10000;
+index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
+
+template<index_type size>
+class Element {
+public:
+    index_type& operator[](index_type i) {
+        return this->array[i];
+    }
+
+    index_type operator[](index_type i) const {
+        return this->array[i];
+    }
+
+    void operator=(const Element<size>& obj) {
+        for (index_type i = 0; i < size; ++i) {
+            this->array[i] = obj[i];
+        }
+    }
+
+    index_type array[size];
 };
 
-struct Triple {
-    uint32_t i;
-    uint32_t r_i;
-    uint32_t next_i;
-    uint32_t r_next_i;
-    uint32_t next_next_i;
-    uint32_t r_next_next_i;
-};
 
-
-template<class data_type>
-data_type max_value() {
-    return;
-}
-
-template<>
-Pair max_value<Pair>() {
-    static Pair n;
-    n.i = UINT32_MAX;
-    n.next_i = UINT32_MAX;
-    return n;
-}
-
-template<>
-Triple max_value<Triple>() {
-    static Triple n;
-    n.i = UINT32_MAX;
-    n.next_i = UINT32_MAX;
-    n.next_next_i = UINT32_MAX;
-    return n;
-}
-
-template<class data_type>
-bool comp(const data_type& d1, const data_type& d2) {
-    return false;
-}
-
-template<>
-bool comp<Pair>(const Pair& d1, const Pair& d2) {
-    return d1.i < d2.i;
-}
-
-template<>
-bool comp<Triple>(const Triple& d1, const Triple& d2) {
-    return d1.next_i < d2.next_i;
+template<index_type size, index_type order_by>
+bool comp(const Element<size>& obj1, const Element<size> obj2) {
+    return obj1[order_by] < obj2[order_by];
 }
 
 
-template<class data_type>
-bool equal(const data_type& d1, const data_type& d2) {
-    return false;
-}
-
-template<>
-bool equal<Pair>(const Pair& d1, const Pair& d2) {
-    return (d1.i == d2.i) && (d1.next_i == d2.next_i);
-}
-
-template<>
-bool equal<Triple>(const Triple& d1, const Triple& d2) {
-    return (d1.i == d2.i) && (d1.next_i == d2.next_i) && (d1.next_next_i == d2.next_next_i);
-}
-
-
-template<class data_type>
+template<index_type size>
 class File {
 public:
-    File(std::string filename):
-            cur_idx(0),
-            cur_read_idx(0),
-            block_size(BLOCK_SIZE)
-    {
+    File(const std::string& filename): cur_idx(0), cur_read_idx(0), block_size(BLOCK_SIZE) {
         this->fin.open(filename.c_str(), std::ios::in | std::ios::binary);
 
         // get file size
         this->fin.seekg(0, std::ios::end);
-        this->file_size = fin.tellg() / sizeof(data_type);
+        this->file_size = fin.tellg() / sizeof(Element<size>);
         this->fin.seekg(0);
 
-        this->block = new data_type[this->block_size];
+        this->block = new Element<size>[this->block_size];
         this->read_block();
     }
     ~File() {
         fin.close();
-        free(this->block);
+        delete this->block;
     }
 
-    data_type get_min() {
+    Element<size> get_min() {
         if (this->cur_idx == this->block_size) {
             this->read_block();
             this->cur_idx = 0;
@@ -119,7 +77,7 @@ public:
     }
 
     void pop_min() {
-        if (equal<data_type>(this->block[0], max_value<data_type>())) {
+        if (this->block[0][0] == MAX_VALUE) {
             return;
         }
 
@@ -128,7 +86,7 @@ public:
 private:
     void read_block() {
         if (this->cur_read_idx == this->file_size) {
-            this->block[0] = max_value<data_type>();
+            this->block[0][0] = MAX_VALUE;
             return;
         }
 
@@ -137,43 +95,43 @@ private:
         }
         this->cur_read_idx += this->block_size;
 
-        this->fin.read((char*) block, sizeof(data_type) * this->block_size);
+        this->fin.read((char*) block, sizeof(Element<size>) * this->block_size);
     }
 
     std::ifstream fin;
-    data_type *block;
-    uint32_t block_size, cur_idx;
-    uint32_t file_size, cur_read_idx;
+    Element<size> *block;
+    index_type block_size, cur_idx;
+    index_type file_size, cur_read_idx;
 };
 
 
-const std::string make_name(uint32_t num_it, uint32_t i) {
+const std::string make_name(index_type num_it, index_type i) {
     std::ostringstream oss;
     oss << num_it << "_" << i << ".bin";
     return oss.str();
 }
 
 
-template<class data_type>
-uint32_t sort_blocks(std::string filename) {
+template<index_type size, index_type order_by>
+index_type sort_blocks(const std::string& filename) {
     std::ifstream fin(filename.c_str(), std::ios::in | std::ios::binary);
-    uint32_t N;
-    fin.read((char*) &N, sizeof(uint32_t));
+    index_type N;
+    fin.read((char*) &N, sizeof(index_type));
 
-    data_type *block = new data_type[MEMORY_SIZE];
-    uint32_t count_files = 0, num_file = 1;
+    Element<size> *block = new Element<size>[MEMORY_SIZE];
+    index_type count_files = 0, num_file = 1;
 
-    for (uint32_t i = 0; i < N; i += MEMORY_SIZE) {
-        uint32_t read_size = MEMORY_SIZE;
+    for (index_type i = 0; i < N; i += MEMORY_SIZE) {
+        index_type read_size = MEMORY_SIZE;
         if (i + MEMORY_SIZE > N) {
             read_size = N - i;
         }
 
-        fin.read((char*) block, sizeof(data_type) * read_size);
-        std::sort(block, block + read_size, comp<data_type>);
+        fin.read((char*) block, sizeof(Element<size>) * read_size);
+        std::sort(block, block + read_size, comp<size, order_by>);
 
-        std::ofstream fout(make_name((uint32_t) 1, num_file).c_str(), std::ios::out | std::ios::binary);
-        fout.write((char*) block, sizeof(data_type) * read_size);
+        std::ofstream fout(make_name((index_type) 1, num_file).c_str(), std::ios::out | std::ios::binary);
+        fout.write((char*) block, sizeof(Element<size>) * read_size);
         fout.close();
 
         count_files++;
@@ -185,54 +143,55 @@ uint32_t sort_blocks(std::string filename) {
 }
 
 
-template<class data_type>
-uint32_t merge(uint32_t count_block, uint32_t prev_count_files, uint32_t num_it) {
-    uint32_t count_files = 0, num_file = 1;
-    data_type *block = new data_type[MEMORY_SIZE];
+template<index_type size>
+index_type merge(index_type count_block, index_type prev_count_files, index_type num_it) {
+    index_type count_files = 0, num_file = 1;
+    Element<size> *block = new Element<size>[MEMORY_SIZE];
 
-    for (uint32_t i = 0; i < prev_count_files; i += count_block) {
+    for (index_type i = 0; i < prev_count_files; i += count_block) {
         std::ofstream fout(make_name(num_it + 1, num_file).c_str(), std::ios::out | std::ios::binary);
 
         if (i + count_block > prev_count_files) {
             count_block = prev_count_files - i;
         }
 
-        std::vector<File<data_type>*> files(count_block);
+        std::vector<File<size>*> files(count_block);
 
-        for (uint32_t j = 0; j < count_block; ++j) {
-            files[j] = new File<data_type>(make_name(num_it, i + j + 1));
+        for (index_type j = 0; j < count_block; ++j) {
+            files[j] = new File<size>(make_name(num_it, i + j + 1));
         }
 
-        uint32_t cur_idx = 0;
+        index_type cur_idx = 0;
 
         while (true) {
-            uint32_t min_j = 0;
-            data_type min = max_value<data_type>();
-            for (uint32_t j = 0; j < count_block; ++j) {
-                if (comp<data_type>(files[j]->get_min(), min)) {
-                    min = files[j]->get_min();
+            index_type min_j = 0, min = MAX_VALUE;
+            Element<size> min_el;
+            for (index_type j = 0; j < count_block; ++j) {
+                if (files[j]->get_min()[0] < min) {
+                    min = files[j]->get_min()[0];
+                    min_el = files[j]->get_min();
                     min_j = j;
                 }
             }
             files[min_j]->pop_min();
 
-            if (equal<data_type>(min, max_value<data_type>())) {
+            if (min == MAX_VALUE) {
                 break;
             }
 
-            block[cur_idx] = min;
+            block[cur_idx] = min_el;
             cur_idx++;
 
             if (cur_idx == MEMORY_SIZE) {
-                fout.write((char*) block, sizeof(data_type) * MEMORY_SIZE);
+                fout.write((char*) block, sizeof(Element<size>) * MEMORY_SIZE);
                 cur_idx = 0;
             }
         }
         if (cur_idx) {
-            fout.write((char*) block, sizeof(data_type) * cur_idx);
+            fout.write((char*) block, sizeof(Element<size>) * cur_idx);
         }
 
-        for (uint32_t j = 0; j < count_block; ++j) {
+        for (index_type j = 0; j < count_block; ++j) {
             delete files[j];
         }
 
@@ -240,137 +199,110 @@ uint32_t merge(uint32_t count_block, uint32_t prev_count_files, uint32_t num_it)
         num_file++;
     }
 
-    free(block);
+    delete block;
     return count_files;
 }
 
 
-template<class data_type>
-void make_output(std::string filename, uint32_t num_it, bool is_write_n=true) {
-    std::ifstream fin(make_name(num_it, (uint32_t) 1).c_str(), std::ios::in | std::ios::binary);
+template<index_type size>
+void make_output(const std::string& filename, index_type num_it, bool is_write_n=true) {
+    std::ifstream fin(make_name(num_it, (index_type) 1).c_str(), std::ios::in | std::ios::binary);
     std::ofstream fout(filename.c_str(), std::ios::out | std::ios::binary);
 
     fin.seekg(0, std::ios::end);
-    uint32_t N = fin.tellg() / sizeof(data_type);
+    index_type N = fin.tellg() / sizeof(Element<size>);
     fin.seekg(0);
 
     if (is_write_n) {
-        fout.write((char *) &N, sizeof(uint32_t));
+        fout.write((char *) &N, sizeof(index_type));
     }
 
-    uint32_t read_size = MEMORY_SIZE;
-    data_type *block = new data_type[MEMORY_SIZE];
+    index_type read_size = MEMORY_SIZE;
+    Element<size> *block = new Element<size>[MEMORY_SIZE];
 
-    for (uint32_t i = 0; i < N; i += MEMORY_SIZE) {
+    for (index_type i = 0; i < N; i += MEMORY_SIZE) {
         if (i + MEMORY_SIZE > N) {
             read_size = N - i;
         }
-        fin.read((char*) block, sizeof(data_type) * read_size);
-        fout.write((char*) block, sizeof(data_type) * read_size);
+        fin.read((char*) block, sizeof(Element<size>) * read_size);
+        fout.write((char*) block, sizeof(Element<size>) * read_size);
     }
 
-    free(block);
+    delete block;
     fin.close();
     fout.close();
 }
 
-template<class data_type>
+template<index_type size, index_type order_by>
 void merge_sort(const std::string& in_filename, const std::string& out_filename, bool is_write_n=true) {
-    uint32_t count_files = sort_blocks<data_type>(in_filename), num_it = 1;
+    index_type count_files = sort_blocks<size, order_by>(in_filename), num_it = 1;
     while (count_files != 1) {
-        count_files = merge<data_type>(COUNT_BLOCK, count_files, num_it);
+        count_files = merge<size>(COUNT_BLOCK, count_files, num_it);
         num_it++;
     }
-    make_output<data_type>(out_filename, num_it, is_write_n);
+    make_output<size>(out_filename, num_it, is_write_n);
 }
 
-
-void reverse_pair() {
-    std::ifstream fin("input.bin", std::ios::in | std::ios::binary);
-    std::ofstream fout("reverse_input.bin", std::ios::out | std::ios::binary);
-
-    uint32_t N;
-    fin.read((char*) &N, sizeof(uint32_t));
-    fout.write((char*) &N, sizeof(uint32_t));
-
-    uint32_t read_size = MEMORY_SIZE;
-    Pair *block = new Pair[MEMORY_SIZE];
-
-    for (uint32_t i = 0; i < N; i += MEMORY_SIZE) {
-        if (i + MEMORY_SIZE > N) {
-            read_size = N - i;
-        }
-        fin.read((char*) block, sizeof(Pair) * read_size);
-
-        for (uint32_t j = 0; j < read_size; ++j) {
-            std::swap(block[j].i, block[j].next_i);
-            std::swap(block[j].r_i, block[j].r_next_i);
-        }
-
-        fout.write((char*) block, sizeof(Pair) * read_size);
-    }
-
-    free(block);
-    fin.close();
-    fout.close();
-}
 
 void join(const std::string& filename1, const std::string& filename2, const std::string& out_filename) {
     std::ifstream fin1(filename1.c_str(), std::ios::in | std::ios::binary);
     std::ifstream fin2(filename2.c_str(), std::ios::in | std::ios::binary);
     std::ofstream fout(out_filename.c_str(), std::ios::out | std::ios::binary);
 
-    uint32_t N;
-    fin1.read((char*) &N, sizeof(uint32_t));
-    fin2.seekg(sizeof(uint32_t));
+    index_type N;
+    fin1.read((char*) &N, sizeof(index_type));
+    fin2.seekg(sizeof(index_type));
 
-    fout.write((char*) &N, sizeof(uint32_t));
+    fout.write((char*) &N, sizeof(index_type));
 
-    uint32_t TMP_MEMORY_SIZE = MEMORY_SIZE / 5;
-    uint32_t read_size = TMP_MEMORY_SIZE;
-    Pair *block1 = new Pair[TMP_MEMORY_SIZE];
-    Pair *block2 = new Pair[TMP_MEMORY_SIZE];
-    Triple *out_block = new Triple[TMP_MEMORY_SIZE];
+    index_type TMP_MEMORY_SIZE = MEMORY_SIZE / 5;
+    index_type read_size = TMP_MEMORY_SIZE;
+    Element<5> *block1 = new Element<5>[TMP_MEMORY_SIZE];
+    Element<5> *block2 = new Element<5>[TMP_MEMORY_SIZE];
+    Element<8> *out_block = new Element<8>[TMP_MEMORY_SIZE];
 
-    for (uint32_t i = 0; i < N; i += TMP_MEMORY_SIZE) {
+    for (index_type i = 0; i < N; i += TMP_MEMORY_SIZE) {
         if (i + TMP_MEMORY_SIZE > N) {
             read_size = N - i;
         }
-        fin1.read((char*) block1, sizeof(Pair) * read_size);
-        fin2.read((char*) block2, sizeof(Pair) * read_size);
+        fin1.read((char*) block1, sizeof(Element<2>) * read_size);
+        fin2.read((char*) block2, sizeof(Element<2>) * read_size);
 
-        for (uint32_t j = 0; j < read_size; ++j) {
-            out_block[j].i = block2[j].next_i;
-            out_block[j].next_i = block1[j].i;
-            out_block[j].next_next_i = block1[j].next_i;
+        for (index_type j = 0; j < read_size; ++j) {
+            out_block[j][0] = block2[j][0];
+            out_block[j][1] = block1[j][0];
+            out_block[j][2] = block1[j][1];
+            out_block[j][3] = block2[j][2];
+            out_block[j][4] = block1[j][2];
+            out_block[j][5] = block1[j][3];
+            out_block[j][6] = block2[j][4];
+            out_block[j][7] = block1[j][4];
         }
 
-        fout.write((char*) out_block, sizeof(Triple) * read_size);
+        fout.write((char*) out_block, sizeof(Element<8>) * read_size);
     }
 
     fin1.close();
     fin2.close();
     fout.close();
-    free(block1);
-    free(block2);
-    free(out_block);
+    delete block1;
+    delete block2;
+    delete out_block;
 }
 
 
-void join(const std::string& in_filename, const std::string& out_filename) {
-    reverse_pair();
-
+void make_join(const std::string& in_filename, const std::string& out_filename) {
     // sort pairs
-    merge_sort<Pair>(in_filename.c_str(), "tmp1.bin");
+    merge_sort<2, 0>(in_filename, "tmp1.bin");
 
     // sort reverse pairs
-    merge_sort<Pair>("reverse_input.bin", "tmp2.bin");
+    merge_sort<2, 1>("reverse_input.bin", "tmp2.bin");
 
     // join
     join("tmp1.bin", "tmp2.bin", "tmp.bin");
 
     // sort result
-    merge_sort<Triple>("tmp.bin", out_filename.c_str(), false);
+    merge_sort<3, 0>("tmp.bin", out_filename, false);
 }
 
 
@@ -379,28 +311,29 @@ void init(const std::string& in_filename, const std::string& out_filename) {
     std::ifstream in(in_filename.c_str(), std::ios::in | std::ios::binary);
     std::ofstream out(out_filename.c_str(), std::ios::out | std::ios::binary);
 
-    uint32_t n, read_size;
-    std::pair<uint32_t, uint32_t> in_block[BLOCK_SIZE];
-    Pair out_block[BLOCK_SIZE];
+    index_type n, read_size;
+    Element<2> in_block[BLOCK_SIZE];
+    Element<5> out_block[BLOCK_SIZE];
 
-    in.read((char*) &n, sizeof(uint32_t));
-    out.write((char*) &n, sizeof(uint32_t));
+    in.read((char*) &n, sizeof(index_type));
+    out.write((char*) &n, sizeof(index_type));
 
-    for (uint32_t i = 0; i < n; i += BLOCK_SIZE) {
+    for (index_type i = 0; i < n; i += BLOCK_SIZE) {
         read_size = BLOCK_SIZE;
         if (i + BLOCK_SIZE >= n) {
             read_size = n - i;
         }
 
-        in.read((char*) in_block, read_size);
-        for (uint32_t j = 0; j < read_size; ++j) {
-            out_block[j].i = in_block[j].first;
-            out_block[j].next_i = in_block[j].second;
-            out_block[j].r_i = 1;
-            out_block[j].r_next_i = 1;
+        in.read((char*) in_block, sizeof(Element<2>) * read_size);
+        for (index_type j = 0; j < read_size; ++j) {
+            out_block[j][0] = in_block[j][0];
+            out_block[j][1] = in_block[j][1];
+            out_block[j][2] = 1;
+            out_block[j][3] = 1;
+            out_block[j][4] = rand() % 2;
         }
 
-        out.write((char*) out_block, read_size);
+        out.write((char*) out_block, sizeof(Element<5>) * read_size);
     }
 
     in.close();
@@ -408,40 +341,30 @@ void init(const std::string& in_filename, const std::string& out_filename) {
 }
 
 
-void gen_d(const std::string& pairs, const std::string& d) {
-    std::ifstream in(pairs.c_str(), std::ios::in | std::ios::binary);
-    std::ofstream out(d.c_str(), std::ios::out | std::ios::binary);
-
-
-
-    in.close();
-    out.close();
-}
-
-uint32_t forward_iter(const std::string& pairs, const std::string& triples, const std::string& ds, const std::string& dels) {
-    gen_d(pairs, ds);
-    join(pairs, triples);
-
-
-    return 0;
+void make_list_ranking(const std::string& in_filename, const std::string& out_filename) {
+    init(in_filename.c_str(), "pair.bin");
 }
 
 
 int main() {
-    init("input.bin", "pairs.bin");
+    srand(time(0));
 
-    uint32_t i = 1, n;
-    while (true) {
-        std::ostringstream oss;
-        oss << "del_" << i << ".bin";
-        n = forward_iter("pairs.bin", "triples.bin", "d.bin", oss.str());
+    make_list_ranking("input.bin", "output.bin")
 
-        if (n < MEMORY_SIZE) {
-            break;
-        } else {
-            i++;
-        }
-    }
+//    init("input.bin", "pairs.bin");
+//
+//    index_type i = 1, n;
+//    while (true) {
+//        std::ostringstream oss;
+//        oss << "del_" << i << ".bin";
+//        n = forward_iter("pairs.bin", "triples.bin", "d.bin", oss.str());
+//
+//        if (n < MEMORY_SIZE) {
+//            break;
+//        } else {
+//            i++;
+//        }
+//    }
 
     return 0;
 }
