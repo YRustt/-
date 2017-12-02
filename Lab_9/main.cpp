@@ -19,8 +19,8 @@ typedef uint32_t index_type;
 
 index_type MAX_VALUE = UINT32_MAX;
 
-index_type BLOCK_SIZE = 200;
-index_type MEMORY_SIZE = 5000;
+index_type BLOCK_SIZE = 5;
+index_type MEMORY_SIZE = 20;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 template<index_type size>
@@ -124,12 +124,12 @@ public:
         delete this->block;
     }
     void write(const Element<size>& obj) {
-        if (this->cur_idx < BLOCK_SIZE) {
-            this->block[this->cur_idx] = obj;
-            this->cur_idx++;
-        } else {
+        if (this->cur_idx >= BLOCK_SIZE) {
             this->flush();
         }
+
+        this->block[this->cur_idx] = obj;
+        this->cur_idx++;
     }
 private:
     void write_size() {
@@ -315,7 +315,7 @@ void join(const std::string& filename1, const std::string& filename2, const std:
 
     fout.write((char*) &N, sizeof(index_type));
 
-    index_type read_size = MEMORY_SIZE;
+    index_type read_size = BLOCK_SIZE;
     Element<4> *block1 = new Element<4>[BLOCK_SIZE];
     Element<4> *block2 = new Element<4>[BLOCK_SIZE];
     Element<7> *out_block = new Element<7>[BLOCK_SIZE];
@@ -470,8 +470,42 @@ index_type forward_iter(const std::string& deleted) {
     return cur_n;
 }
 
-void expand() {
+void expand(index_type idx) {
     std::ifstream in("pairs.bin", std::ios::in | std::ios::binary);
+
+    index_type n;
+    in.read((char*) &n, sizeof(index_type));
+
+    Element<4> pairs[n];
+
+    std::ostringstream oss;
+    oss << "result_" << idx << ".bin";
+    WriteFile<2> result(oss.str());
+    Element<2> tmp;
+    index_type first;
+    index_type next;
+
+    in.read((char*) pairs, sizeof(Element<4>) * n);
+    tmp[0] = pairs[0][0];
+    tmp[1] = pairs[0][2];
+    first = pairs[0][0];
+    next = pairs[0][1];
+    result.write(tmp);
+
+    while (next != first) {
+        std::cout << first << " " << next << std::endl;
+        for (index_type i = 0; i < n; ++i) {
+            if (pairs[i][0] == next) {
+                tmp[0] = pairs[i][0];
+                tmp[1] = pairs[i][2] + tmp[1];
+                next = pairs[i][1];
+                result.write(tmp);
+                break;
+            }
+        }
+    }
+
+    in.close();
 }
 
 void make_list_ranking(const std::string& in_filename, const std::string& out_filename) {
@@ -489,15 +523,14 @@ void make_list_ranking(const std::string& in_filename, const std::string& out_fi
         }
     }
 
-
+    expand(i);
 }
 
 
 int main() {
     srand(time(NULL));
 
-//    make_list_ranking("input.bin", "output.bin");
-    merge_sort<2, 0>("input.bin", "output.bin");
+    make_list_ranking("input.bin", "output.bin");
 
     return 0;
 }
