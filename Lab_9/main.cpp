@@ -19,8 +19,8 @@ typedef uint32_t index_type;
 
 index_type MAX_VALUE = UINT32_MAX;
 
-index_type BLOCK_SIZE = 5;
-index_type MEMORY_SIZE = 20;
+index_type BLOCK_SIZE = 400;
+index_type MEMORY_SIZE = 5000;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 template<index_type size>
@@ -165,24 +165,17 @@ index_type sort_blocks(const std::string& filename) {
     index_type N;
     fin.read((char*) &N, sizeof(index_type));
 
-    Element<size> *block = new Element<size>[BLOCK_SIZE];
+    Element<size> *block = new Element<size>[MEMORY_SIZE];
     index_type count_files = 0, num_file = 1;
 
-    for (index_type i = 0; i < N; i += BLOCK_SIZE) {
-        index_type read_size = BLOCK_SIZE;
-        if (i + BLOCK_SIZE > N) {
+    for (index_type i = 0; i < N; i += MEMORY_SIZE) {
+        index_type read_size = MEMORY_SIZE;
+        if (i + MEMORY_SIZE > N) {
             read_size = N - i;
         }
 
         fin.read((char*) block, sizeof(Element<size>) * read_size);
         std::sort(block, block + read_size, comp<size, order_by>);
-
-//        std::cout << "sort " << size << " " << order_by << "|";
-//        for (uint32_t j = 0; j < read_size; ++j) {
-//            std::cout << "(" << block[j][0] << " " << block[j][1] << ")";
-//        }
-//        std::cout << std::endl;
-
 
         std::ofstream fout(make_name((index_type) 1, num_file).c_str(), std::ios::out | std::ios::binary);
         fout.write((char*) block, sizeof(Element<size>) * read_size);
@@ -200,7 +193,7 @@ index_type sort_blocks(const std::string& filename) {
 template<index_type size, index_type order_by>
 index_type merge(index_type count_block, index_type prev_count_files, index_type num_it) {
     index_type count_files = 0, num_file = 1;
-    Element<size> *block = new Element<size>[BLOCK_SIZE];
+    Element<size> *block = new Element<size>[MEMORY_SIZE];
 
     for (index_type i = 0; i < prev_count_files; i += count_block) {
         std::ofstream fout(make_name(num_it + 1, num_file).c_str(), std::ios::out | std::ios::binary);
@@ -236,14 +229,8 @@ index_type merge(index_type count_block, index_type prev_count_files, index_type
             block[cur_idx] = min_el;
             cur_idx++;
 
-            if (cur_idx == BLOCK_SIZE) {
-//                std::cout << "merge " << size << "|";
-//                for (uint32_t j = 0; j < MEMORY_SIZE; ++j) {
-//                    std::cout << "(" << block[j][0] << " " << block[j][1] << ")";
-//                }
-//                std::cout << std::endl;
-
-                fout.write((char*) block, sizeof(Element<size>) * BLOCK_SIZE);
+            if (cur_idx == MEMORY_SIZE) {
+                fout.write((char*) block, sizeof(Element<size>) * MEMORY_SIZE);
                 cur_idx = 0;
             }
         }
@@ -315,13 +302,14 @@ void join(const std::string& filename1, const std::string& filename2, const std:
 
     fout.write((char*) &N, sizeof(index_type));
 
-    index_type read_size = BLOCK_SIZE;
-    Element<4> *block1 = new Element<4>[BLOCK_SIZE];
-    Element<4> *block2 = new Element<4>[BLOCK_SIZE];
-    Element<7> *out_block = new Element<7>[BLOCK_SIZE];
+    index_type TMP_MEMORY_SIZE = MEMORY_SIZE / 2;
+    index_type read_size = TMP_MEMORY_SIZE;
+    Element<4> *block1 = new Element<4>[TMP_MEMORY_SIZE];
+    Element<4> *block2 = new Element<4>[TMP_MEMORY_SIZE];
+    Element<7> *out_block = new Element<7>[TMP_MEMORY_SIZE];
 
-    for (index_type i = 0; i < N; i += BLOCK_SIZE) {
-        if (i + BLOCK_SIZE > N) {
+    for (index_type i = 0; i < N; i += TMP_MEMORY_SIZE) {
+        if (i + TMP_MEMORY_SIZE > N) {
             read_size = N - i;
         }
         fin1.read((char*) block1, sizeof(Element<4>) * read_size);
@@ -335,10 +323,6 @@ void join(const std::string& filename1, const std::string& filename2, const std:
             out_block[j][4] = block1[j][2];
             out_block[j][5] = block2[j][3];
             out_block[j][6] = block1[j][3];
-
-//            std::cout << out_block[j][0] << " " << out_block[j][1] << " " << out_block[j][2]
-//            << "|" << block2[j][0] << " " << block2[j][1]
-//            << "|" << block1[j][0] << " " << block1[j][1] << std::endl;
         }
 
         fout.write((char*) out_block, sizeof(Element<7>) * read_size);
@@ -376,15 +360,15 @@ index_type init(const std::string& in_filename, const std::string& out_filename)
     std::ofstream out(out_filename.c_str(), std::ios::out | std::ios::binary);
 
     index_type n, read_size;
-    Element<2> in_block[BLOCK_SIZE];
-    Element<4> out_block[BLOCK_SIZE];
+    Element<2> in_block[MEMORY_SIZE];
+    Element<4> out_block[MEMORY_SIZE];
 
     in.read((char*) &n, sizeof(index_type));
     out.write((char*) &n, sizeof(index_type));
 
-    for (index_type i = 0; i < n; i += BLOCK_SIZE) {
-        read_size = BLOCK_SIZE;
-        if (i + BLOCK_SIZE > n) {
+    for (index_type i = 0; i < n; i += MEMORY_SIZE) {
+        read_size = MEMORY_SIZE;
+        if (i + MEMORY_SIZE > n) {
             read_size = n - i;
         }
 
@@ -493,7 +477,6 @@ void expand(index_type idx) {
     result.write(tmp);
 
     while (next != first) {
-        std::cout << first << " " << next << std::endl;
         for (index_type i = 0; i < n; ++i) {
             if (pairs[i][0] == next) {
                 tmp[0] = pairs[i][0];
@@ -513,17 +496,18 @@ void make_list_ranking(const std::string& in_filename, const std::string& out_fi
 
     index_type i = 0;
     while (n > MEMORY_SIZE) {
+        i++;
         std::ostringstream oss;
         oss << "del_" << i << ".bin";
 
         n = forward_iter(oss.str());
-
-        if (n >= MEMORY_SIZE) {
-            i++;
-        }
     }
 
     expand(i);
+
+    if (i > 0) {
+
+    }
 }
 
 
