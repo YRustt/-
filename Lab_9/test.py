@@ -1,6 +1,7 @@
 import os
 import time
 import argparse
+import random
 
 
 if __name__ == '__main__':
@@ -16,10 +17,18 @@ if __name__ == '__main__':
         ar = [int(x) for x in input("Enter 2 * N numbers:\n").split()]
     else:
         N = args.n
+        nodes = list(range(1, N + 1))
+        random.shuffle(nodes)
+
+        edges = []
+        for i in range(N):
+            edges.append([nodes[i], nodes[(i + 1) % N]])
+
+        random.shuffle(edges)
+
         ar = []
-        for i in range(N, 0, -1):
-            ar.extend([i, i - 1])
-        ar[-1] = N
+        for e in edges:
+            ar.extend(e)
 
     with open('input.bin', 'wb') as file:
         file.write(N.to_bytes(4, byteorder='little'))
@@ -42,8 +51,7 @@ if __name__ == '__main__':
 
     if args.o:
         with open('output.bin', 'rb') as file:
-            N = int.from_bytes(file.read(4), byteorder='little')
-            ar = [int.from_bytes(file.read(4), byteorder='little') for _ in range(2 * N)]
+            ar = [int.from_bytes(file.read(4), byteorder='little') for _ in range(N)]
     
             print("N=%d" % N)
             print(ar)

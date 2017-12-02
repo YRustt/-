@@ -13,14 +13,15 @@
 #include <cstdlib>
 #include <random>
 #include <time.h>
+#include <stdio.h>
 
 
 typedef uint32_t index_type;
 
 index_type MAX_VALUE = UINT32_MAX;
 
-index_type BLOCK_SIZE = 400;
-index_type MEMORY_SIZE = 5000;
+index_type BLOCK_SIZE = 200;
+index_type MEMORY_SIZE = 1000;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 template<index_type size>
@@ -53,8 +54,8 @@ bool comp(const Element<size>& obj1, const Element<size>& obj2) {
 template<index_type size>
 class File {
 public:
-    File(const std::string& filename): cur_idx(0), cur_read_idx(0), block_size(BLOCK_SIZE) {
-        this->fin.open(filename.c_str(), std::ios::in | std::ios::binary);
+    File(const std::string& filename): cur_idx(0), cur_read_idx(0), block_size(BLOCK_SIZE), filename(filename) {
+        this->fin.open(this->filename.c_str(), std::ios::in | std::ios::binary);
 
         // get file size
         this->fin.seekg(0, std::ios::end);
@@ -67,6 +68,16 @@ public:
     ~File() {
         fin.close();
         delete this->block;
+    }
+
+    void reopen() {
+        this->fin.close();
+        this->fin.open(this->filename.c_str(), std::ios::in | std::ios::binary);
+        delete this->block;
+        this->block = new Element<size>[this->block_size];
+        this->cur_idx = 0;
+        this->cur_read_idx = 0;
+        this->read_block();
     }
 
     Element<size> read() {
@@ -106,23 +117,36 @@ private:
     Element<size> *block;
     index_type block_size, cur_idx;
     index_type file_size, cur_read_idx;
+    const std::string filename;
 };
 
 
 template<index_type size>
 class WriteFile {
 public:
-    WriteFile(const std::string& filename): cur_idx(0), file_size(0) {
+    WriteFile(const std::string& filename, bool is_write_n=true): cur_idx(0), file_size(0), is_write_n(is_write_n) {
         this->out.open(filename.c_str(), std::ios::out | std::ios::binary);
-        this->out.seekp(sizeof(index_type));
+        if (this->is_write_n) {
+            this->out.seekp(sizeof(index_type));
+        }
         this->block = new Element<size>[BLOCK_SIZE];
     }
     ~WriteFile() {
         this->flush();
-        this->write_size();
+        if (this->is_write_n) {
+            this->write_size();
+        }
         this->out.close();
         delete this->block;
     }
+    void close() {
+        this->flush();
+        if (this->is_write_n) {
+            this->write_size();
+        }
+        this->out.close();
+    }
+
     void write(const Element<size>& obj) {
         if (this->cur_idx >= BLOCK_SIZE) {
             this->flush();
@@ -149,6 +173,7 @@ private:
     std::ofstream out;
     Element<size> *block;
     index_type cur_idx, file_size;
+    bool is_write_n;
 };
 
 
@@ -247,6 +272,9 @@ index_type merge(index_type count_block, index_type prev_count_files, index_type
     }
 
     delete block;
+    for (index_type i = 0; i < prev_count_files; ++i) {
+        remove(make_name(num_it, i + 1).c_str());
+    }
     return count_files;
 }
 
@@ -397,7 +425,7 @@ index_type forward_iter(const std::string& deleted) {
     std::ifstream triples("triples.bin", std::ios::in | std::ios::binary);
 
     WriteFile<4> pairs("pairs.bin");
-    WriteFile<3> d(deleted);
+    WriteFile<3> d(deleted, false);
     Element<4> el_pairs;
     Element<3> el_d;
 
@@ -425,7 +453,7 @@ index_type forward_iter(const std::string& deleted) {
                 } else {
                     el_d[0] = block[j][0];
                     el_d[1] = block[j][1];
-                    el_d[2] = block[j][4];
+                    el_d[2] = block[j][3];
                     d.write(el_d);
 
                     cur_n++;
@@ -465,31 +493,143 @@ void expand(index_type idx) {
     std::ostringstream oss;
     oss << "result_" << idx << ".bin";
     WriteFile<2> result(oss.str());
-    Element<2> tmp;
-    index_type first;
-    index_type next;
 
     in.read((char*) pairs, sizeof(Element<4>) * n);
-    tmp[0] = pairs[0][0];
-    tmp[1] = pairs[0][2];
-    first = pairs[0][0];
-    next = pairs[0][1];
-    result.write(tmp);
 
-    while (next != first) {
-        for (index_type i = 0; i < n; ++i) {
-            if (pairs[i][0] == next) {
-                tmp[0] = pairs[i][0];
-                tmp[1] = pairs[i][2] + tmp[1];
-                next = pairs[i][1];
-                result.write(tmp);
-                break;
-            }
+    index_type min = MAX_VALUE, min_idx;
+    for (index_type i = 0; i < n; ++i) {
+        if (pairs[i][0] < min) {
+            min = pairs[i][0];
+            min_idx = i;
         }
     }
 
+    index_type cur_idx, rank;
+    Element<2> tmp;
+//    // std::cout << "expand" << std::endl;
+    for (index_type i = 0; i < n; ++i) {
+//        // std::cout << i << std::endl;
+        rank = 0;
+        cur_idx = min_idx;
+        while (true) {
+            if(pairs[i][0] == pairs[cur_idx][0]) {
+                break;
+            }
+            for (index_type j = 0; j < n; ++j) {
+                if (pairs[j][0] == pairs[cur_idx][1]) {
+                    rank += pairs[cur_idx][2];
+                    cur_idx = j;
+                    break;
+                }
+            }
+        }
+        tmp[0] = pairs[i][0];
+        tmp[1] = rank;
+        result.write(tmp);
+    }
+    result.close();
+
+    bool is_write_n = (idx)? false : true;
+    merge_sort<2, 0>(oss.str(), oss.str(), is_write_n);
+
     in.close();
 }
+
+void backward_iter(index_type i) {
+    std::ostringstream result_name, d_name, new_result_name;
+    result_name << "result_" << i << ".bin";
+    d_name << "del_" << i << ".bin";
+    new_result_name << "result_" << i - 1 << ".bin";
+    File<2> result(result_name.str());
+    File<3> d(d_name.str());
+
+    WriteFile<2> new_result(new_result_name.str());
+
+    Element<2> cur_res, prev_res;
+    Element<3> cur_d;
+
+    while (result.read()[0] != MAX_VALUE) {
+        cur_res = result.read();
+        cur_d = d.read();
+        if(cur_res[0] == cur_d[0]) {
+            prev_res[0] = cur_d[1];
+            prev_res[1] = cur_res[1] + cur_d[2];
+            new_result.write(prev_res);
+            new_result.write(cur_res);
+            result.next();
+            d.next();
+        } else {
+            new_result.write(cur_res);
+            result.next();
+        }
+    }
+    new_result.close();
+
+    remove(result_name.str().c_str());
+    remove(d_name.str().c_str());
+
+    bool is_write_n = (i - 1)? false : true;
+    merge_sort<2, 0>(new_result_name.str(), new_result_name.str(), is_write_n);
+}
+
+void make_result() {
+    merge_sort<2, 1>("result_0.bin", "result.bin", false);
+
+    File<2> in("result.bin");
+    WriteFile<1> out("tmp.bin", false);
+    Element<1> el;
+    while (true) {
+        if(in.read()[0] == MAX_VALUE) {
+            break;
+        }
+
+        el[0] = in.read()[0];
+        in.next();
+        out.write(el);
+    }
+    out.close();
+
+    File<1> tmp("tmp.bin");
+    WriteFile<1> output("output.bin", false);
+    index_type offset, min = MAX_VALUE, idx=0;
+    while (true) {
+        if (tmp.read()[0] == MAX_VALUE) {
+            break;
+        }
+
+        if (tmp.read()[0] < min) {
+            min = tmp.read()[0];
+            offset = idx;
+        }
+
+        tmp.next();
+        idx++;
+    }
+    // std::cout << offset << " " << min << std::endl;
+
+    tmp.reopen();
+    for (index_type i = 0; i < offset; ++i) {
+        tmp.read();
+        tmp.next();
+    }
+
+    while (true) {
+        if (tmp.read()[0] == MAX_VALUE) {
+            break;
+        }
+        // std::cout << tmp.read()[0] << std::endl;
+        output.write(tmp.read());
+        tmp.next();
+    }
+
+    tmp.reopen();
+    for (index_type i = 0; i < offset; ++i) {
+        // std::cout << tmp.read()[0] << std::endl;
+        output.write(tmp.read());
+        tmp.next();
+    }
+}
+
 
 void make_list_ranking(const std::string& in_filename, const std::string& out_filename) {
     index_type n = init(in_filename.c_str(), "pairs.bin");
@@ -500,14 +640,21 @@ void make_list_ranking(const std::string& in_filename, const std::string& out_fi
         std::ostringstream oss;
         oss << "del_" << i << ".bin";
 
+//        // std::cout << "forward " << n << std::endl;
+
         n = forward_iter(oss.str());
     }
 
     expand(i);
 
-    if (i > 0) {
+    while (i > 0) {
 
+//        // std::cout << "backward " << i << std::endl;
+        backward_iter(i);
+        i--;
     }
+
+    make_result();
 }
 
 
