@@ -19,12 +19,12 @@ public:
     }
     void add(const std::string& s) {
         for (uint32_t i = 0; i < k; ++i) {
-            this->filter[this->hash(i, s)] = true;
+            this->filter[this->hash(i + 1, s)] = true;
         }
     }
     bool test(const std::string& s) {
         for (uint32_t i = 0; i < k; ++i) {
-            if (!this->filter[this->hash(i, s)]) {
+            if (!this->filter[this->hash(i + 1, s)]) {
                 return false;
             }
         }
