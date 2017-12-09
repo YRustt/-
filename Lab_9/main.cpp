@@ -129,7 +129,7 @@ public:
         if (this->is_write_n) {
             this->out.seekp(sizeof(index_type));
         }
-        this->block = new Element<size>[BLOCK_SIZE];
+        this->block = new Element<size>[MEMORY_SIZE];
     }
     ~WriteFile() {
         this->flush();
@@ -148,7 +148,7 @@ public:
     }
 
     void write(const Element<size>& obj) {
-        if (this->cur_idx >= BLOCK_SIZE) {
+        if (this->cur_idx >= MEMORY_SIZE) {
             this->flush();
         }
 
@@ -272,9 +272,9 @@ index_type merge(index_type count_block, index_type prev_count_files, index_type
     }
 
     delete block;
-    for (index_type i = 0; i < prev_count_files; ++i) {
-        remove(make_name(num_it, i + 1).c_str());
-    }
+//    for (index_type i = 0; i < prev_count_files; ++i) {
+//        remove(make_name(num_it, i + 1).c_str());
+//    }
     return count_files;
 }
 
@@ -565,8 +565,8 @@ void backward_iter(index_type i) {
     }
     new_result.close();
 
-    remove(result_name.str().c_str());
-    remove(d_name.str().c_str());
+//    remove(result_name.str().c_str());
+//    remove(d_name.str().c_str());
 
     bool is_write_n = (i - 1)? false : true;
     merge_sort<2, 0>(new_result_name.str(), new_result_name.str(), is_write_n);

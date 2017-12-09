@@ -1,7 +1,6 @@
 //
 // Created by yrustt on 26.11.17.
 //
-
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -16,12 +15,12 @@
 #include <stdio.h>
 
 
-typedef uint32_t index_type;
+typedef uint64_t index_type;
 
-index_type MAX_VALUE = UINT32_MAX;
+index_type MAX_VALUE = UINT64_MAX;
 
-index_type BLOCK_SIZE = 200;
-index_type MEMORY_SIZE = 1000;
+index_type BLOCK_SIZE = 80;
+index_type MEMORY_SIZE = 400;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 template<index_type size>
@@ -55,23 +54,23 @@ template<index_type size>
 class File {
 public:
     File(const std::string& filename, bool has_write_n=false) {
-        this->filename = filename;
         this->cur_idx = 0;
-        this->cur_read_idx = 00;
+        this->cur_read_idx = 0;
         this->block_size = BLOCK_SIZE;
+        this->filename = filename;
         this->has_write_n = has_write_n;
 
         this->fin.open(this->filename.c_str(), std::ios::in | std::ios::binary);
 
-        if (this->has_write_n) {
-            this->fin.read((char*) &this->file_size, sizeof(this->file_size));
-        } else {
+        if (!this->has_write_n) {
             // get file size
             this->fin.seekg(0, std::ios::end);
             this->file_size = fin.tellg() / sizeof(Element<size>);
             this->fin.seekg(0);
+        } else {
+            this->fin.read((char*) &this->file_size, sizeof(index_type));
+            this->file_size--;
         }
-
 
         this->block = new Element<size>[this->block_size];
         this->read_block();
@@ -85,7 +84,7 @@ public:
         this->fin.close();
         this->fin.open(this->filename.c_str(), std::ios::in | std::ios::binary);
         if (this->has_write_n) {
-            this->fin.seekg(4);
+            this->fin.seekg(sizeof(index_type));
         }
 
         delete this->block;
@@ -145,7 +144,7 @@ public:
         if (this->is_write_n) {
             this->out.seekp(sizeof(index_type));
         }
-        this->block = new Element<size>[BLOCK_SIZE];
+        this->block = new Element<size>[MEMORY_SIZE];
     }
     ~WriteFile() {
         this->flush();
@@ -164,7 +163,7 @@ public:
     }
 
     void write(const Element<size>& obj) {
-        if (this->cur_idx >= BLOCK_SIZE) {
+        if (this->cur_idx >= MEMORY_SIZE) {
             this->flush();
         }
 
@@ -190,6 +189,94 @@ private:
     Element<size> *block;
     index_type cur_idx, file_size;
     bool is_write_n;
+};
+
+
+template<index_type size>
+class Stack {
+public:
+    Stack() {
+        this->cur_idx = 0;
+        this->cur_file_idx = 0;
+        this->left_border = BLOCK_SIZE / 2;
+        this->right_border = 3 / 2 * BLOCK_SIZE;
+        this->block = new Element<size>[2 * BLOCK_SIZE];
+    }
+    ~Stack() {
+        delete this->block;
+    }
+    Element<size>& top() {
+        if ((this->cur_idx == 0) && this->cur_file_idx) {
+            this->read();
+        }
+
+//        std::cout << this->block[this->cur_idx - 1][0] << std::endl;
+
+//        std::cout << this->cur_idx << std::endl;
+
+        return this->block[this->cur_idx - 1];
+    }
+    void pop() {
+        if ((this->cur_idx < this->left_border) && this->cur_file_idx) {
+            this->read();
+        }
+        if (cur_idx == 0) {
+            return;
+        }
+        this->cur_idx--;
+
+//        for (index_type i = 0; i < this->cur_idx; ++i) {
+//            std::cout << this->block[i][0] << " ";
+//        }
+//        std::cout << std::endl;
+    }
+    void push(const Element<size>& obj) {
+        if (this->cur_idx > this->right_border) {
+//            std::cout << "write " << this->cur_file_idx << std::endl;
+            this->write();
+        }
+        this->block[this->cur_idx] = obj;
+        this->cur_idx++;
+
+//        for (index_type i = 0; i < this->cur_idx; ++i) {
+//            std::cout << this->block[i][0] << " ";
+//        }
+//        std::cout << std::endl;
+    }
+
+private:
+    void write() {
+        std::ostringstream oss;
+        oss << "stack_" << this->cur_file_idx++ << ".bin";
+        std::ofstream out(oss.str().c_str(), std::ios::out | std::ios::binary);
+        out.write((char*) this->block, sizeof(Element<size>) * BLOCK_SIZE);
+        out.close();
+
+        for (index_type i = BLOCK_SIZE; i < this->cur_idx; ++i) {
+            this->block[i - BLOCK_SIZE] = this->block[i];
+        }
+        this->cur_idx -= BLOCK_SIZE;
+    }
+
+    void read() {
+        this->cur_file_idx--;
+        std::ostringstream oss;
+        oss << "stack_" << this->cur_file_idx << ".bin";
+        std::ifstream in(oss.str().c_str(), std::ios::in | std::ios::binary);
+
+        for (index_type i = 0; i < this->cur_idx; ++i) {
+            this->block[i + BLOCK_SIZE] = this->block[i];
+        }
+        in.read((char*) this->block, sizeof(Element<size>) * BLOCK_SIZE);
+        this->cur_idx += BLOCK_SIZE;
+
+//        std::cout << "read" << std::endl;
+    }
+
+    Element<size> *block;
+    index_type left_border, right_border;
+    index_type cur_idx;
+    index_type cur_file_idx;
 };
 
 
@@ -588,7 +675,7 @@ void backward_iter(index_type i) {
     merge_sort<2, 0>(new_result_name.str(), new_result_name.str(), is_write_n);
 }
 
-void make_result() {
+void make_result(const std::string& out_filename) {
     merge_sort<2, 1>("result_0.bin", "result.bin", false);
 
     File<2> in("result.bin");
@@ -606,7 +693,7 @@ void make_result() {
     out.close();
 
     File<1> tmp("tmp.bin");
-    WriteFile<1> output("output.bin", false);
+    WriteFile<1> output(out_filename.c_str(), false);
     index_type offset, min = MAX_VALUE, idx=0;
     while (true) {
         if (tmp.read()[0] == MAX_VALUE) {
@@ -670,16 +757,251 @@ void make_list_ranking(const std::string& in_filename, const std::string& out_fi
         i--;
     }
 
-    make_result();
+    make_result(out_filename);
 }
 
+void prepare_32_to_64(const std::string& in_filename, const std::string& out_filename) {
+    std::ifstream in(in_filename.c_str(), std::ios::in | std::ios::binary);
+    in.seekg(0, std::ios::end);
+    uint32_t file_size = in.tellg() / sizeof(uint32_t);
+    in.seekg(0);
+
+    WriteFile<1> out(out_filename, false);
+    Element<1> el;
+    uint32_t block[MEMORY_SIZE];
+    uint32_t read_size = MEMORY_SIZE;
+
+    for (uint32_t i = 0; i < file_size; i += MEMORY_SIZE) {
+        if (i + MEMORY_SIZE > file_size) {
+            read_size = file_size - i;
+        }
+        in.read((char*) block, sizeof(uint32_t) * read_size);
+        for (uint32_t j = 0; j < read_size; ++j) {
+            el[0] = block[j];
+            out.write(el);
+        }
+    }
+
+    in.close();
+    out.close();
+}
+
+void step_1(const std::string& in_filename, const std::string& out_filename) {
+    prepare_32_to_64(in_filename, "new_input.bin");
+    File<2> in("new_input.bin", true);
+    WriteFile<2> out(out_filename, true);
+    Element<2> out_el;
+    index_type cur_idx = 0;
+    while (in.read()[0] != MAX_VALUE) {
+//        std::cout << in.read()[0] << " " << in.read()[1] << std::endl;
+        out_el[0] = in.read()[0];
+        out_el[1] = in.read()[1];
+        out.write(out_el);
+        out_el[0] = in.read()[1];
+        out_el[1] = in.read()[0];
+        out.write(out_el);
+        in.next();
+    }
+    out.close();
+    merge_sort<2, 0>(out_filename, out_filename, false);
+}
+
+index_type edge_to_num(const Element<2>& edge) {
+//    std::cout << edge[0] << " " << edge[1] << " " << (edge[0] << 32) + edge[1] << std::endl;
+    return (edge[0] << 32) + edge[1];
+}
+
+
+void step_2(const std::string& in_filename, const std::string& out_filename) {
+    File<2> in(in_filename, false);
+    WriteFile<2> out(out_filename, true);
+    Element<2> first_in, cur_in, next_in, tmp_in, tmp_out;
+    cur_in = in.read();
+    first_in = cur_in;
+    while (cur_in[0] != MAX_VALUE) {
+        in.next();
+        next_in = in.read();
+
+        if (cur_in[0] == next_in[0]) {
+            tmp_out[0] = edge_to_num(cur_in);
+            tmp_in[0] = next_in[1];
+            tmp_in[1] = next_in[0];
+            tmp_out[1] = edge_to_num(tmp_in);
+//            std::cout << cur_in[0] << " " << cur_in[1] << " - " << tmp_in[0] << " " << tmp_in[1] << std::endl;
+            out.write(tmp_out);
+        } else {
+            tmp_out[0] = edge_to_num(cur_in);
+            tmp_in[0] = first_in[1];
+            tmp_in[1] = first_in[0];
+            tmp_out[1] = edge_to_num(tmp_in);
+//            std::cout << cur_in[0] << " " << cur_in[1] << " - " << tmp_in[0] << " " << tmp_in[1] << std::endl;
+            out.write(tmp_out);
+            first_in = next_in;
+        }
+        cur_in = next_in;
+    }
+}
+
+void make_unique_node(index_type idx, const std::string& in_filename, const std::string& out_filename) {
+    File<2> in(in_filename);
+    WriteFile<1> out(out_filename, false);
+    Element<1> cur;
+    cur[0] = in.read()[idx];
+    in.next();
+    out.write(cur);
+
+    while (in.read()[0] != MAX_VALUE) {
+        if (in.read()[idx] != cur[0]) {
+            cur[0] = in.read()[idx];
+            out.write(cur);
+        }
+        in.next();
+    }
+}
+
+index_type find_root() {
+    File<2> in("new_input.bin", true);
+    WriteFile<2> out("tmp.bin", true);
+    while (in.read()[0] != MAX_VALUE) {
+        out.write(in.read());
+        in.next();
+    }
+    out.close();
+
+    merge_sort<2, 0>("tmp.bin", "tmp1.bin", false);
+    merge_sort<2, 1>("tmp.bin", "tmp2.bin", false);
+    make_unique_node(0, "tmp1.bin", "unique_tmp1.bin");
+    make_unique_node(1, "tmp2.bin", "unique_tmp2.bin");
+
+    File<1> in_1("unique_tmp1.bin");
+    File<1> in_2("unique_tmp2.bin");
+
+    while (in_1.read()[0] != MAX_VALUE) {
+        if (in_1.read()[0] == in_2.read()[0]) {
+            in_2.next();
+        }
+        in_1.next();
+    }
+
+    return in_2.read()[0];
+}
+
+index_type get_first_node(index_type edge_num) {
+    return edge_num & (((index_type) 1 << 32) - 1);
+}
+
+index_type get_second_node(index_type edge_num) {
+    return edge_num >> 32;
+}
+
+
+void transform(index_type root, const std::string& in_filename, const std::string& out_filename) {
+    File<1> in(in_filename);
+    WriteFile<1> out(out_filename, false);
+
+    while (get_first_node(in.read()[0]) != root) {
+//        std::cout << get_first_node(in.read()[0]) << " " << get_second_node(in.read()[0]) << std::endl;
+        in.next();
+    }
+
+    while (in.read()[0] != MAX_VALUE) {
+        out.write(in.read());
+        in.next();
+    }
+    in.reopen();
+    while (get_first_node(in.read()[0]) != root) {
+        out.write(in.read());
+        in.next();
+    }
+}
+
+void make_magic(const std::string& in_filename, const std::string& out_filename) {
+    File<1> in(in_filename);
+    WriteFile<2> out(out_filename);
+    Element<2> out_el;
+    index_type cur_depth = 0;
+    index_type first_node, second_node, cur_first_node, cur_second_node;
+    first_node = get_first_node(in.read()[0]);
+    second_node = get_second_node(in.read()[0]);
+    in.next();
+    out_el[0] = first_node;
+    out_el[1] = cur_depth;
+    out.write(out_el);
+    out_el[0] = second_node;
+    out_el[1] = ++cur_depth;
+    out.write(out_el);
+
+    Stack<1> stack;
+    Element<1> stack_el;
+    stack_el[0] = first_node;
+    stack.push(stack_el);
+
+    while (in.read()[0] != MAX_VALUE) {
+        cur_first_node = get_first_node(in.read()[0]);
+        cur_second_node = get_second_node(in.read()[0]);
+
+        if (stack.top()[0] != cur_second_node) {
+//            std::cout << stack.top()[0] << " " << cur_second_node << std::endl;
+            out_el[0] = cur_second_node;
+            out_el[1] = ++cur_depth;
+            out.write(out_el);
+            stack_el[0] = second_node;
+            stack.push(stack_el);
+        } else {
+//            std::cout << stack.top()[0] << " " << cur_second_node << std::endl;
+            cur_depth--;
+            stack.pop();
+        }
+        first_node = cur_first_node;
+        second_node = cur_second_node;
+        in.next();
+    }
+}
+
+
+void prepare_64_to_32(const std::string& in_filename, const  std::string& out_filename) {
+    std::ofstream out(out_filename.c_str(), std::ios::out | std::ios::binary);
+    File<1> in(in_filename);
+
+    uint32_t block[MEMORY_SIZE];
+    uint32_t cur_idx = 0;
+
+    while (in.read()[0] != MAX_VALUE) {
+        block[cur_idx++] = in.read()[0];
+        if (cur_idx == MEMORY_SIZE) {
+            out.write((char*) block, sizeof(uint32_t) * MEMORY_SIZE);
+            cur_idx = 0;
+        }
+
+        in.next();
+    }
+    if (cur_idx) {
+        out.write((char*) block, sizeof(uint32_t) * cur_idx);
+    }
+
+    out.close();
+}
+
+
+void make_traversal(const std::string& in_filename, const std::string& out_filename) {
+    step_1(in_filename, "step_1.bin");
+    step_2("step_1.bin", "step_2.bin");
+    make_list_ranking("step_2.bin", "step_3.bin");
+
+    index_type root = find_root();
+
+    transform(root, "step_3.bin", "step_4.bin");
+    make_magic("step_4.bin", "tmp_output.bin");
+    merge_sort<2, 0>("tmp_output.bin", "tmp_output.bin", false);
+    prepare_64_to_32("tmp_output.bin", "output.bin");
+}
 
 
 
 int main() {
     srand(time(NULL));
 
-    make_list_ranking("input.bin", "output.bin");
+    make_traversal("input.bin", "output.bin");
 
     return 0;
 }
