@@ -19,8 +19,8 @@ typedef uint64_t index_type;
 
 index_type MAX_VALUE = UINT64_MAX;
 
-index_type BLOCK_SIZE = 60;
-index_type MEMORY_SIZE = 300;
+index_type BLOCK_SIZE = 100;
+index_type MEMORY_SIZE = 500;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 template<index_type size>
@@ -433,7 +433,7 @@ void join(const std::string& filename1, const std::string& filename2, const std:
 
     fout.write((char*) &N, sizeof(index_type));
 
-    index_type TMP_MEMORY_SIZE = MEMORY_SIZE / 2;
+    index_type TMP_MEMORY_SIZE = MEMORY_SIZE / 4;
     index_type read_size = TMP_MEMORY_SIZE;
     Element<4> *block1 = new Element<4>[TMP_MEMORY_SIZE];
     Element<4> *block2 = new Element<4>[TMP_MEMORY_SIZE];
