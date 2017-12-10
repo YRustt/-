@@ -19,7 +19,7 @@ typedef uint64_t index_type;
 
 index_type MAX_VALUE = UINT64_MAX;
 
-index_type BLOCK_SIZE = 100;
+index_type BLOCK_SIZE = 110;
 index_type MEMORY_SIZE = 700;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
