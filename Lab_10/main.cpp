@@ -433,7 +433,7 @@ void join(const std::string& filename1, const std::string& filename2, const std:
 
     fout.write((char*) &N, sizeof(index_type));
 
-    index_type TMP_MEMORY_SIZE = MEMORY_SIZE / 4;
+    index_type TMP_MEMORY_SIZE = MEMORY_SIZE / 2;
     index_type read_size = TMP_MEMORY_SIZE;
     Element<4> *block1 = new Element<4>[TMP_MEMORY_SIZE];
     Element<4> *block2 = new Element<4>[TMP_MEMORY_SIZE];
