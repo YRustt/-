@@ -15,12 +15,12 @@
 #include <stdio.h>
 
 
-typedef uint64_t index_type;
+typedef uint32_t index_type;
 
-index_type MAX_VALUE = UINT64_MAX;
+index_type MAX_VALUE = UINT32_MAX;
 
-index_type BLOCK_SIZE = 110;
-index_type MEMORY_SIZE = 700;
+index_type BLOCK_SIZE = 200;
+index_type MEMORY_SIZE = 1000;
 index_type COUNT_BLOCK = MEMORY_SIZE / BLOCK_SIZE;
 
 template<index_type size>
